@@ -1,0 +1,95 @@
+#!/usr/bin/bash
+
+echoUsage()
+{
+    echo "Usage: build-common <package-name> <destination> [FLAGS]"
+    echo "  <package-name>  The name of the package to build"
+    echo "  <destination>   The destination directory to build to"
+    echo "Flags:"
+    echo "  -y  Skip installation confirmation"
+}
+
+#######################
+# Change these to your own paths
+# i.e. all my Step repos live in ~/dev
+# See the autocompletion script (.bashrc) for how I have it set up
+STEP_DEV_DIR=~/dev
+COMMON_DIR=$STEP_DEV_DIR/step-common
+#######################
+
+# If not 2 arguments, exit
+if [ $# -lt 2 ]; then
+    echoUsage
+    exit 1
+fi
+
+set -e
+
+SKIP_CONFIRM=false
+while getopts ":y" opt; do
+    case $opt in
+        y)
+            SKIP_CONFIRM=true
+            ;;
+        \?)
+            echo "Invalid option: -$OPTARG" >&2
+            echoUsage
+            exit 1
+            ;;
+    esac
+done
+
+shift $((OPTIND -1))
+
+PACKAGE_NAME=$1
+DESTINATION=$2
+FINAL_DIR=$STEP_DEV_DIR/$DESTINATION
+
+echo "Building $PACKAGE_NAME"
+
+cd $COMMON_DIR
+npx nx reset
+npx nx build $PACKAGE_NAME
+cd ./dist/packages/$PACKAGE_NAME
+tar -czf ../$PACKAGE_NAME.tgz .
+mv ../$PACKAGE_NAME.tgz $FINAL_DIR
+
+if [ "$SKIP_CONFIRM" = "false" ]; then
+    if [[ $* == *-y* ]]; then
+        REPLY="y"
+    else
+        read -p "Reinstall at develop branch HEAD commit? [Y/n]:" -n 1 -r
+        echo
+    fi
+
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Exiting..."
+        exit 0
+    fi
+fi
+
+PKG_MANAGER=""
+LOCK_FILE=""
+if [ -f $FINAL_DIR/yarn.lock ]; then
+    LOCK_FILE="yarn.lock"
+    PKG_MANAGER="yarn"
+elif [ -f $FINAL_DIR/package-lock.json ]; then
+    LOCK_FILE="package-lock.json"
+    PKG_MANAGER="npm"
+elif [ -f $FINAL_DIR/pnpm-lock.yaml ]; then
+    LOCK_FILE="pnpm-lock.yaml"
+    PKG_MANAGER="pnpm"
+else
+    echo "No lockfile found. Exiting..."
+    exit 1
+fi
+
+cd $FINAL_DIR
+
+git checkout develop
+HEAD_COMMIT=$(git rev-parse HEAD)
+# Checkout last branch before we switched to develop
+git checkout -
+# Checkout lockfile at develop branch HEAD commit for safe reinstall
+git checkout $HEAD_COMMIT -- $LOCK_FILE
+$PKG_MANAGER install
