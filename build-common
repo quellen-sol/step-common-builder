@@ -6,7 +6,7 @@ echoUsage()
     echo "  <package-name>  The name of the package to build"
     echo "  <destination>   The destination directory to build to"
     echo "Flags:"
-    echo "  -y  Skip installation confirmation"
+    echo "  -n  Skip installation confirmation"
 }
 
 #######################
@@ -17,29 +17,28 @@ STEP_DEV_DIR=~/dev
 COMMON_DIR=$STEP_DEV_DIR/step-common
 #######################
 
-# If not 2 arguments, exit
-if [ $# -lt 2 ]; then
+# If not enough arguments, print usage and exit
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then
     echoUsage
     exit 1
 fi
 
-set -e
+shift 2
 
+# Parse -n
 SKIP_CONFIRM=false
-while getopts ":y" opt; do
+while getopts ":n" opt; do
     case $opt in
-        y)
+        n)
             SKIP_CONFIRM=true
             ;;
         \?)
             echo "Invalid option: -$OPTARG" >&2
-            echoUsage
             exit 1
             ;;
     esac
 done
 
-shift $((OPTIND -1))
 
 PACKAGE_NAME=$1
 DESTINATION=$2
@@ -54,15 +53,14 @@ cd ./dist/packages/$PACKAGE_NAME
 tar -czf ../$PACKAGE_NAME.tgz .
 mv ../$PACKAGE_NAME.tgz $FINAL_DIR
 
-if [ "$SKIP_CONFIRM" = "false" ]; then
-    if [[ $* == *-y* ]]; then
-        REPLY="y"
+if [ $SKIP_CONFIRM = true ]; then
+    echo "Skipping installation confirmation"
+else
+    read -p "Install package? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "Installing package..."
     else
-        read -p "Reinstall at develop branch HEAD commit? [Y/n]:" -n 1 -r
-        echo
-    fi
-
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         echo "Exiting..."
         exit 0
     fi
@@ -81,15 +79,10 @@ elif [ -f $FINAL_DIR/pnpm-lock.yaml ]; then
     PKG_MANAGER="pnpm"
 else
     echo "No lockfile found. Exiting..."
-    exit 1
+    exit 0
 fi
 
 cd $FINAL_DIR
 
-git checkout develop
-HEAD_COMMIT=$(git rev-parse HEAD)
-# Checkout last branch before we switched to develop
-git checkout -
-# Checkout lockfile at develop branch HEAD commit for safe reinstall
-git checkout $HEAD_COMMIT -- $LOCK_FILE
+git checkout develop -- $LOCK_FILE
 $PKG_MANAGER install
