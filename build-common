@@ -6,7 +6,7 @@ echoUsage()
     echo "  <package-name>  The name of the package to build"
     echo "  <destination>   The destination directory to build to"
     echo "Flags:"
-    echo "  -n  Skip installation confirmation"
+    echo "  -n  Do not install the package"
 }
 
 #######################
@@ -22,6 +22,10 @@ if [ $# -lt 2 ] || [ $# -gt 3 ]; then
     echoUsage
     exit 1
 fi
+
+PACKAGE_NAME=$1
+DESTINATION=$2
+FINAL_DIR=$STEP_DEV_DIR/$DESTINATION
 
 shift 2
 
@@ -39,14 +43,12 @@ while getopts ":n" opt; do
     esac
 done
 
-
-PACKAGE_NAME=$1
-DESTINATION=$2
-FINAL_DIR=$STEP_DEV_DIR/$DESTINATION
-
 echo "Building $PACKAGE_NAME"
 
+set -e
+
 cd $COMMON_DIR
+pwd
 npx nx reset
 npx nx build $PACKAGE_NAME
 cd ./dist/packages/$PACKAGE_NAME
@@ -55,16 +57,10 @@ mv ../$PACKAGE_NAME.tgz $FINAL_DIR
 
 if [ $SKIP_CONFIRM = true ]; then
     echo "Skipping installation confirmation"
-else
-    read -p "Install package? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "Installing package..."
-    else
-        echo "Exiting..."
-        exit 0
-    fi
+    exit 0
 fi
+
+echo "Installing package..."
 
 PKG_MANAGER=""
 LOCK_FILE=""
