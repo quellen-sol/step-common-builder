@@ -85,4 +85,4 @@ fi
 cd $FINAL_DIR
 
 git checkout develop -- $LOCK_FILE
-$PKG_MANAGER install
+$PKG_MANAGER install @stepfinance/$PACKAGE_NAME@file:./$PACKAGE_NAME.tgz
